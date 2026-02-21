@@ -74,6 +74,17 @@ export class GameScene extends Phaser.Scene {
     private ammoText!: Phaser.GameObjects.Text;
     private isInvincible: boolean = false;
 
+    // ---- 모바일 터치 컨트롤 ----
+    private isMobile: boolean = false;
+    private joystickBase!: Phaser.GameObjects.Arc;
+    private joystickThumb!: Phaser.GameObjects.Arc;
+    private joystickPointerID: number = -1;
+    private joystickVector: Phaser.Math.Vector2 = new Phaser.Math.Vector2(0, 0);
+    private fireButton!: Phaser.GameObjects.Arc;
+    private _fireButtonGlow!: Phaser.GameObjects.Arc;
+    private fireButtonText!: Phaser.GameObjects.Text;
+    private isFireTouched: boolean = false;
+
     constructor() {
         super('GameScene');
     }
@@ -159,6 +170,12 @@ export class GameScene extends Phaser.Scene {
 
         // ---- 상태 ----
         this.isInvincible = false;
+
+        // ---- 모바일 터치 컨트롤 ----
+        this.isMobile = !this.sys.game.device.os.desktop;
+        if (this.isMobile) {
+            this.createTouchControls();
+        }
 
         // 스테이지 시작 연출
         this.showStageAnnouncement(0);
@@ -394,6 +411,89 @@ export class GameScene extends Phaser.Scene {
         }).setDepth(21).setOrigin(0, 0.5);
     }
 
+    private createTouchControls(): void {
+        const JOYSTICK_RADIUS = 60;
+        const THUMB_RADIUS = 25;
+        const jx = 100;
+        const jy = GAME_HEIGHT - 120;
+
+        // 조이스틱 베이스 (반투명 원)
+        this.joystickBase = this.add.circle(jx, jy, JOYSTICK_RADIUS, 0x4466aa, 0.25)
+            .setDepth(100).setStrokeStyle(2, 0x6699cc, 0.4).setScrollFactor(0);
+
+        // 조이스틱 썸 (드래그할 원)
+        this.joystickThumb = this.add.circle(jx, jy, THUMB_RADIUS, 0x88bbee, 0.5)
+            .setDepth(101).setStrokeStyle(2, 0xaaddff, 0.7).setScrollFactor(0);
+
+        // FIRE 버튼
+        const fx = GAME_WIDTH - 100;
+        const fy = GAME_HEIGHT - 120;
+        const FIRE_RADIUS = 50;
+
+        this._fireButtonGlow = this.add.circle(fx, fy, FIRE_RADIUS + 5, 0xff3333, 0.15)
+            .setDepth(100).setScrollFactor(0);
+        this.fireButton = this.add.circle(fx, fy, FIRE_RADIUS, 0xcc2222, 0.35)
+            .setDepth(100).setStrokeStyle(3, 0xff4444, 0.6).setScrollFactor(0);
+        this.fireButtonText = this.add.text(fx, fy, 'FIRE', {
+            fontFamily: 'Orbitron, monospace', fontSize: '16px', fontStyle: 'bold', color: '#ff6666',
+        }).setOrigin(0.5).setDepth(101).setAlpha(0.7).setScrollFactor(0);
+
+        // ---- 조이스틱 터치 처리 ----
+        this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+            // 왼쪽 절반 터치 → 조이스틱
+            if (pointer.x < GAME_WIDTH / 2 && this.joystickPointerID === -1) {
+                this.joystickPointerID = pointer.id;
+                // 조이스틱 위치를 터치 위치로 이동
+                this.joystickBase.setPosition(pointer.x, pointer.y);
+                this.joystickThumb.setPosition(pointer.x, pointer.y);
+            }
+            // 오른쪽 절반 터치 → Fire
+            if (pointer.x >= GAME_WIDTH / 2) {
+                this.isFireTouched = true;
+                this.fireButton.setFillStyle(0xff3333, 0.6);
+                this.fireButtonText.setAlpha(1);
+            }
+        });
+
+        this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+            if (pointer.id === this.joystickPointerID) {
+                const dx = pointer.x - this.joystickBase.x;
+                const dy = pointer.y - this.joystickBase.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist > JOYSTICK_RADIUS) {
+                    // 최대 반경으로 클lamping
+                    this.joystickThumb.setPosition(
+                        this.joystickBase.x + (dx / dist) * JOYSTICK_RADIUS,
+                        this.joystickBase.y + (dy / dist) * JOYSTICK_RADIUS,
+                    );
+                    this.joystickVector.set(dx / dist, dy / dist);
+                } else {
+                    this.joystickThumb.setPosition(pointer.x, pointer.y);
+                    this.joystickVector.set(dx / JOYSTICK_RADIUS, dy / JOYSTICK_RADIUS);
+                }
+            }
+        });
+
+        this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+            if (pointer.id === this.joystickPointerID) {
+                this.joystickPointerID = -1;
+                this.joystickThumb.setPosition(jx, jy);
+                this.joystickBase.setPosition(jx, jy);
+                this.joystickVector.set(0, 0);
+            }
+            // Fire 해제 확인 — 오른쪽에 남은 터치가 없으면 해제
+            if (pointer.x >= GAME_WIDTH / 2) {
+                this.isFireTouched = false;
+                this.fireButton.setFillStyle(0xcc2222, 0.35);
+                this.fireButtonText.setAlpha(0.7);
+            }
+        });
+
+        // 멀티터치 최대 수 설정
+        this.input.addPointer(1); // 기본 1개 + 추가 1개 = 2개 동시 지원
+    }
+
     // ============================================================
     // 배경
     // ============================================================
@@ -446,15 +546,28 @@ export class GameScene extends Phaser.Scene {
 
         if (!this.player.active || this.isTransitioning) return;
 
-        // 플레이어 이동
+        // 플레이어 이동 (키보드 + 터치)
         this.player.setVelocity(0);
-        if (this.cursors.left.isDown) this.player.setVelocityX(-this.playerSpeed);
-        else if (this.cursors.right.isDown) this.player.setVelocityX(this.playerSpeed);
-        if (this.cursors.up.isDown) this.player.setVelocityY(-this.playerSpeed);
-        else if (this.cursors.down.isDown) this.player.setVelocityY(this.playerSpeed);
 
-        // 총알 발사
-        if (this.spaceKey.isDown && time > this.lastFired && this.ammo > 0) {
+        if (this.isMobile) {
+            // 모바일: 조이스틱 입력 반영
+            if (this.joystickVector.length() > 0.15) {
+                this.player.setVelocity(
+                    this.joystickVector.x * this.playerSpeed,
+                    this.joystickVector.y * this.playerSpeed,
+                );
+            }
+        } else {
+            // PC: 키보드 입력
+            if (this.cursors.left.isDown) this.player.setVelocityX(-this.playerSpeed);
+            else if (this.cursors.right.isDown) this.player.setVelocityX(this.playerSpeed);
+            if (this.cursors.up.isDown) this.player.setVelocityY(-this.playerSpeed);
+            else if (this.cursors.down.isDown) this.player.setVelocityY(this.playerSpeed);
+        }
+
+        // 총알 발사 (키보드 Space 또는 모바일 Fire 버튼)
+        const wantsFire = this.isMobile ? this.isFireTouched : this.spaceKey.isDown;
+        if (wantsFire && time > this.lastFired && this.ammo > 0) {
             this.fireBullet();
             this.lastFired = time + this.fireRate;
         }

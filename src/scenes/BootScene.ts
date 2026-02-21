@@ -1,12 +1,18 @@
 // ============================================================
 // BootScene - 에셋 생성
 // ============================================================
-class BootScene extends Phaser.Scene {
-    constructor() { super('BootScene'); }
+import Phaser from 'phaser';
+import { GAME_WIDTH, GAME_HEIGHT, PLANE_DATA } from '../config';
+import type { PlaneColor, PlaneKey } from '../types';
 
-    create() {
+export class BootScene extends Phaser.Scene {
+    constructor() {
+        super('BootScene');
+    }
+
+    create(): void {
         // 모든 비행기 텍스처 생성
-        Object.keys(PLANE_DATA).forEach((key) => {
+        (Object.keys(PLANE_DATA) as PlaneKey[]).forEach((key) => {
             this.createPlaneTexture(key, PLANE_DATA[key].color, key === 'thunder' || key === 'raptor');
         });
         this.createEnemyTexture();
@@ -22,16 +28,13 @@ class BootScene extends Phaser.Scene {
         this.scene.start('SelectScene');
     }
 
-    // 범용 플레이어 비행기 텍스처 생성
-    createPlaneTexture(key, c, isHeavy) {
+    private createPlaneTexture(key: string, c: PlaneColor, isHeavy: boolean): void {
         const w = 64, h = 72;
-        const gfx = this.make.graphics({ add: false });
+        const gfx = this.make.graphics({});
 
-        // 그림자
         gfx.fillStyle(0x000033, 0.3);
         gfx.fillEllipse(32, 40, 50, 20);
 
-        // 동체
         gfx.fillStyle(c.body, 1);
         gfx.beginPath();
         gfx.moveTo(32, 4);
@@ -44,7 +47,6 @@ class BootScene extends Phaser.Scene {
         gfx.closePath();
         gfx.fillPath();
 
-        // 하이라이트
         gfx.fillStyle(c.highlight, 1);
         gfx.beginPath();
         gfx.moveTo(32, 6);
@@ -56,11 +58,9 @@ class BootScene extends Phaser.Scene {
         gfx.closePath();
         gfx.fillPath();
 
-        // 콕핏
         gfx.fillStyle(c.cockpit, 1);
         gfx.fillEllipse(32, 22, 6, 8);
 
-        // 날개 (heavy면 더 넓게)
         const wingSpread = isHeavy ? 5 : 0;
         gfx.fillStyle(c.wing, 1);
         gfx.beginPath();
@@ -81,7 +81,6 @@ class BootScene extends Phaser.Scene {
         gfx.closePath();
         gfx.fillPath();
 
-        // 꼬리 날개
         gfx.fillStyle(c.wing, 1);
         gfx.beginPath();
         gfx.moveTo(28, 54); gfx.lineTo(16, 66); gfx.lineTo(18, 68); gfx.lineTo(28, 62);
@@ -90,7 +89,6 @@ class BootScene extends Phaser.Scene {
         gfx.moveTo(36, 54); gfx.lineTo(48, 66); gfx.lineTo(46, 68); gfx.lineTo(36, 62);
         gfx.closePath(); gfx.fillPath();
 
-        // 엔진
         gfx.fillStyle(c.engine, 1);
         gfx.fillCircle(28, 66, 3);
         gfx.fillCircle(36, 66, 3);
@@ -98,16 +96,15 @@ class BootScene extends Phaser.Scene {
         gfx.fillCircle(28, 66, 1.5);
         gfx.fillCircle(36, 66, 1.5);
 
-        // 기수 팁
         gfx.fillStyle(0xccddff, 1);
         gfx.fillCircle(32, 6, 2);
 
         gfx.generateTexture(`plane_${key}`, w, h);
     }
 
-    createEnemyTexture() {
+    private createEnemyTexture(): void {
         const w = 48, h = 48;
-        const gfx = this.make.graphics({ add: false });
+        const gfx = this.make.graphics({});
         gfx.fillStyle(0x443333, 1);
         gfx.beginPath();
         gfx.moveTo(24, 44); gfx.lineTo(30, 28); gfx.lineTo(32, 10);
@@ -134,38 +131,32 @@ class BootScene extends Phaser.Scene {
         gfx.generateTexture('enemy', w, h);
     }
 
-    createBossTexture() {
+    private createBossTexture(): void {
         const w = 128, h = 120;
-        const gfx = this.make.graphics({ add: false });
-        // 본체 (큰 삼각형)
+        const gfx = this.make.graphics({});
         gfx.fillStyle(0x882222, 1);
         gfx.beginPath();
         gfx.moveTo(64, 110); gfx.lineTo(78, 60); gfx.lineTo(80, 20);
         gfx.lineTo(72, 6); gfx.lineTo(56, 6); gfx.lineTo(48, 20); gfx.lineTo(50, 60);
         gfx.closePath(); gfx.fillPath();
-        // 하이라이트
         gfx.fillStyle(0xaa4444, 1);
         gfx.beginPath();
         gfx.moveTo(64, 105); gfx.lineTo(74, 60); gfx.lineTo(74, 22);
         gfx.lineTo(64, 10); gfx.lineTo(58, 22); gfx.lineTo(54, 60);
         gfx.closePath(); gfx.fillPath();
-        // 콕핏 (빨간 빛)
         gfx.fillStyle(0xff0000, 1);
         gfx.fillEllipse(64, 28, 10, 8);
         gfx.fillStyle(0xff4444, 0.8);
         gfx.fillEllipse(64, 28, 6, 5);
-        // 왼쪽 큰 날개
         gfx.fillStyle(0x772222, 1);
         gfx.beginPath();
         gfx.moveTo(48, 35); gfx.lineTo(4, 50); gfx.lineTo(0, 58);
         gfx.lineTo(6, 62); gfx.lineTo(20, 58); gfx.lineTo(44, 50);
         gfx.closePath(); gfx.fillPath();
-        // 오른쪽 큰 날개
         gfx.beginPath();
         gfx.moveTo(80, 35); gfx.lineTo(124, 50); gfx.lineTo(128, 58);
         gfx.lineTo(122, 62); gfx.lineTo(108, 58); gfx.lineTo(84, 50);
         gfx.closePath(); gfx.fillPath();
-        // 꼬리 날개 (좌우)
         gfx.fillStyle(0x661111, 1);
         gfx.beginPath();
         gfx.moveTo(50, 80); gfx.lineTo(24, 108); gfx.lineTo(30, 112); gfx.lineTo(52, 95);
@@ -173,25 +164,22 @@ class BootScene extends Phaser.Scene {
         gfx.beginPath();
         gfx.moveTo(78, 80); gfx.lineTo(104, 108); gfx.lineTo(98, 112); gfx.lineTo(76, 95);
         gfx.closePath(); gfx.fillPath();
-        // 엔진 4개
         gfx.fillStyle(0xff6600, 1);
         gfx.fillCircle(54, 108, 4); gfx.fillCircle(74, 108, 4);
         gfx.fillCircle(32, 110, 3); gfx.fillCircle(96, 110, 3);
         gfx.fillStyle(0xffaa00, 0.8);
         gfx.fillCircle(54, 108, 2); gfx.fillCircle(74, 108, 2);
-        // 무기 강조
         gfx.fillStyle(0xff0000, 0.9);
         gfx.fillCircle(4, 55, 3); gfx.fillCircle(124, 55, 3);
         gfx.fillCircle(24, 108, 2); gfx.fillCircle(104, 108, 2);
-        // 장갑 디테일
         gfx.lineStyle(1, 0xcc3333, 0.5);
         gfx.lineBetween(64, 15, 64, 100);
         gfx.lineBetween(48, 40, 80, 40);
         gfx.generateTexture('boss', w, h);
     }
 
-    createBulletTexture() {
-        const gfx = this.make.graphics({ add: false });
+    private createBulletTexture(): void {
+        const gfx = this.make.graphics({});
         gfx.fillStyle(0xffcc00, 0.3);
         gfx.fillEllipse(5, 8, 10, 16);
         gfx.fillStyle(0xffdd44, 1);
@@ -203,8 +191,8 @@ class BootScene extends Phaser.Scene {
         gfx.generateTexture('bullet', 10, 16);
     }
 
-    createMissileTexture() {
-        const gfx = this.make.graphics({ add: false });
+    private createMissileTexture(): void {
+        const gfx = this.make.graphics({});
         gfx.fillStyle(0xff3300, 0.3);
         gfx.fillEllipse(5, 8, 10, 16);
         gfx.fillStyle(0xff4400, 1);
@@ -216,8 +204,8 @@ class BootScene extends Phaser.Scene {
         gfx.generateTexture('missile', 10, 16);
     }
 
-    createParticleTexture() {
-        const gfx = this.make.graphics({ add: false });
+    private createParticleTexture(): void {
+        const gfx = this.make.graphics({});
         gfx.fillStyle(0xffaa00, 1);
         gfx.fillCircle(6, 6, 6);
         gfx.fillStyle(0xffdd66, 0.7);
@@ -225,8 +213,8 @@ class BootScene extends Phaser.Scene {
         gfx.generateTexture('particle', 12, 12);
     }
 
-    createExplosionTexture() {
-        const gfx = this.make.graphics({ add: false });
+    private createExplosionTexture(): void {
+        const gfx = this.make.graphics({});
         gfx.fillStyle(0xff6600, 0.6); gfx.fillCircle(24, 24, 24);
         gfx.fillStyle(0xff9900, 0.7); gfx.fillCircle(24, 24, 16);
         gfx.fillStyle(0xffcc00, 0.9); gfx.fillCircle(24, 24, 8);
@@ -234,8 +222,9 @@ class BootScene extends Phaser.Scene {
         gfx.generateTexture('explosion', 48, 48);
     }
 
-    createBackgroundTexture() {
+    private createBackgroundTexture(): void {
         const bgCanvas = this.textures.createCanvas('bg', GAME_WIDTH, GAME_HEIGHT);
+        if (!bgCanvas) return;
         const ctx = bgCanvas.getContext();
         const gradient = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
         gradient.addColorStop(0, '#1a0a3e');
@@ -271,16 +260,21 @@ class BootScene extends Phaser.Scene {
         bgCanvas.refresh();
     }
 
-    createCloudTextures() {
-        [['cloud_big', 240, 80, 100, 35, 0.25],
-        ['cloud_med', 160, 60, 70, 25, 0.2],
-        ['cloud_small', 100, 40, 40, 15, 0.15]].forEach(([name, w, h, rx, ry, alpha]) => {
+    private createCloudTextures(): void {
+        const cloudData: [string, number, number, number, number, number][] = [
+            ['cloud_big', 240, 80, 100, 35, 0.25],
+            ['cloud_med', 160, 60, 70, 25, 0.2],
+            ['cloud_small', 100, 40, 40, 15, 0.15],
+        ];
+        cloudData.forEach(([name, w, h, rx, ry, alpha]) => {
             const c = this.textures.createCanvas(name, w, h);
+            if (!c) return;
             const ctx = c.getContext();
             this.drawCloud(ctx, w / 2, h / 2, rx, ry, alpha);
             c.refresh();
         });
         const fogCanvas = this.textures.createCanvas('fog', GAME_WIDTH, 120);
+        if (!fogCanvas) return;
         const fctx = fogCanvas.getContext();
         const fogGrad = fctx.createLinearGradient(0, 0, 0, 120);
         fogGrad.addColorStop(0, 'rgba(180, 200, 240, 0)');
@@ -291,7 +285,7 @@ class BootScene extends Phaser.Scene {
         fogCanvas.refresh();
     }
 
-    drawCloud(ctx, cx, cy, rx, ry, alpha) {
+    private drawCloud(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: number, ry: number, alpha: number): void {
         ctx.globalAlpha = alpha;
         ctx.fillStyle = '#c8d8f0';
         ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
@@ -304,9 +298,10 @@ class BootScene extends Phaser.Scene {
         ctx.globalAlpha = 1;
     }
 
-    createFloatingIslandTexture() {
+    private createFloatingIslandTexture(): void {
         const w = 120, h = 100;
         const canvas = this.textures.createCanvas('island', w, h);
+        if (!canvas) return;
         const ctx = canvas.getContext();
         ctx.fillStyle = '#3a4577';
         ctx.beginPath();

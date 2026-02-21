@@ -1,14 +1,88 @@
 // ============================================================
 // GameScene - 메인 게임 (5단계 스테이지)
 // ============================================================
-class GameScene extends Phaser.Scene {
-    constructor() { super('GameScene'); }
+import Phaser from 'phaser';
+import { GAME_WIDTH, GAME_HEIGHT, PLANE_DATA, STAGE_CONFIG } from '../config';
+import type { EnemySprite, GameSceneInitData, PlaneKey, StageConfig } from '../types';
 
-    init(data) {
+interface CloudObj {
+    sprite: Phaser.GameObjects.Image;
+    speed: number;
+}
+
+interface IslandObj {
+    sprite: Phaser.GameObjects.Image;
+    speed: number;
+}
+
+export class GameScene extends Phaser.Scene {
+    // ---- 선택 데이터 ----
+    private selectedPlane: PlaneKey = 'falcon';
+
+    // ---- 배경 ----
+    private background!: Phaser.GameObjects.TileSprite;
+    private clouds: CloudObj[] = [];
+    private islands: IslandObj[] = [];
+    private fog1!: Phaser.GameObjects.TileSprite;
+    private fog2!: Phaser.GameObjects.TileSprite;
+
+    // ---- 게임 상태 ----
+    private score: number = 0;
+    private lives: number = 3;
+    private currentStage: number = 0;
+    private stageKills: number = 0;
+    private isTransitioning: boolean = false;
+    private bossActive: boolean = false;
+    private isBossDefeating: boolean = false;  // ★ 보스 처치 중복 호출 방지 가드
+    private boss: EnemySprite | null = null;
+    private bossHPBar: Phaser.GameObjects.Rectangle | null = null;
+    private bossHPBarBg: Phaser.GameObjects.Rectangle | null = null;
+    private bossNameText: Phaser.GameObjects.Text | null = null;
+    private maxAmmo: number = 300;
+    private ammo: number = 300;
+
+    // ---- 물리 그룹 ----
+    private bullets!: Phaser.Physics.Arcade.Group;
+    private enemies!: Phaser.Physics.Arcade.Group;
+    private enemyMissiles!: Phaser.Physics.Arcade.Group;
+
+    // ---- 플레이어 ----
+    private player!: Phaser.Physics.Arcade.Sprite;
+    private engineParticles!: Phaser.GameObjects.Particles.ParticleEmitter;
+    private engineParticles2!: Phaser.GameObjects.Particles.ParticleEmitter;
+
+    // ---- 입력 ----
+    private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+    private spaceKey!: Phaser.Input.Keyboard.Key;
+
+    // ---- 플레이어 스탯 ----
+    private playerSpeed: number = 450;
+    private fireRate: number = 160;
+    private bulletCount: number = 2;
+    private bulletSpeed: number = -550;
+    private lastFired: number = 0;
+
+    // ---- 타이머 ----
+    private enemySpawnTimer: Phaser.Time.TimerEvent | null = null;
+    private missileTimer: Phaser.Time.TimerEvent | null = null;
+
+    // ---- UI ----
+    private scoreText!: Phaser.GameObjects.Text;
+    private livesText!: Phaser.GameObjects.Text;
+    private stageText!: Phaser.GameObjects.Text;
+    private killBarFill!: Phaser.GameObjects.Rectangle;
+    private ammoText!: Phaser.GameObjects.Text;
+    private isInvincible: boolean = false;
+
+    constructor() {
+        super('GameScene');
+    }
+
+    init(data: GameSceneInitData): void {
         this.selectedPlane = data.selectedPlane || 'falcon';
     }
 
-    create() {
+    create(): void {
         const planeData = PLANE_DATA[this.selectedPlane];
 
         // ---- 배경 ----
@@ -27,6 +101,7 @@ class GameScene extends Phaser.Scene {
         this.stageKills = 0;
         this.isTransitioning = false;
         this.bossActive = false;
+        this.isBossDefeating = false;
         this.boss = null;
         this.bossHPBar = null;
         this.bossHPBarBg = null;
@@ -61,8 +136,8 @@ class GameScene extends Phaser.Scene {
         }).setDepth(9);
 
         // ---- 입력 ----
-        this.cursors = this.input.keyboard.createCursorKeys();
-        this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+        this.cursors = this.input.keyboard!.createCursorKeys();
+        this.spaceKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
         // ---- 플레이어 스탯 ----
         this.playerSpeed = planeData.speed;
@@ -71,16 +146,16 @@ class GameScene extends Phaser.Scene {
         this.bulletSpeed = planeData.bulletSpeed;
         this.lastFired = 0;
 
-        // ---- 스테이지 타이머 (create 후 설정) ----
+        // ---- UI (setupStage보다 먼저 생성해야 재시작 시 파괴된 참조 문제 방지) ----
+        this.createUI();
+
+        // ---- 스테이지 타이머 ----
         this.setupStage(0);
 
         // ---- 충돌 ----
-        this.physics.add.overlap(this.bullets, this.enemies, this.hitEnemy, null, this);
-        this.physics.add.overlap(this.player, this.enemyMissiles, this.playerHit, null, this);
-        this.physics.add.overlap(this.player, this.enemies, this.playerHitByEnemy, null, this);
-
-        // ---- UI ----
-        this.createUI();
+        this.physics.add.overlap(this.bullets, this.enemies, this.hitEnemy as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
+        this.physics.add.overlap(this.player, this.enemyMissiles, this.playerHit as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
+        this.physics.add.overlap(this.player, this.enemies, this.playerHitByEnemy as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback, undefined, this);
 
         // ---- 상태 ----
         this.isInvincible = false;
@@ -89,9 +164,15 @@ class GameScene extends Phaser.Scene {
         this.showStageAnnouncement(0);
     }
 
-    setupStage(stageIndex) {
+    // ============================================================
+    // 스테이지 관리
+    // ============================================================
+
+    private setupStage(stageIndex: number): void {
         this.currentStage = stageIndex;
         this.stageKills = 0;
+        this.bossActive = false;
+        this.isBossDefeating = false;
         this.ammo = this.maxAmmo;
         if (this.ammoText) {
             this.ammoText.setText(`${this.ammo}/${this.maxAmmo}`);
@@ -121,21 +202,28 @@ class GameScene extends Phaser.Scene {
         if (this.killBarFill) {
             this.killBarFill.setSize(1, 4);
         }
+        // 스테이지 텍스트 UI 업데이트
+        if (this.stageText) {
+            this.stageText.setText(cfg.label);
+        }
+
+        // 플레이어 위치를 중앙 하단으로 리셋
+        if (this.player && this.player.active) {
+            this.player.setPosition(GAME_WIDTH / 2, GAME_HEIGHT - 100);
+            this.player.setVelocity(0);
+        }
     }
 
-    showStageAnnouncement(stageIndex) {
+    private showStageAnnouncement(stageIndex: number): void {
         const cfg = STAGE_CONFIG[stageIndex];
         this.isTransitioning = true;
 
-        // 어두운 오버레이
         const overlay = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000011, 0.6)
             .setDepth(30);
 
-        // 라인
         const line1 = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 30, 0, 2, 0x00ccff, 0.8).setDepth(31);
         const line2 = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 30, 0, 2, 0x00ccff, 0.8).setDepth(31);
 
-        // 스테이지 텍스트
         const stageLabel = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 10, cfg.label, {
             fontFamily: 'Orbitron, monospace',
             fontSize: '40px',
@@ -151,7 +239,6 @@ class GameScene extends Phaser.Scene {
             color: '#00ccff',
         }).setOrigin(0.5).setDepth(31).setAlpha(0);
 
-        // 애니메이션 시퀀스
         this.tweens.add({
             targets: [line1, line2],
             width: 500,
@@ -184,25 +271,24 @@ class GameScene extends Phaser.Scene {
         });
     }
 
-    showStageClear() {
+    private showStageClear(): void {
         this.isTransitioning = true;
 
-        // 모든 적과 미사일 제거
-        this.enemies.getChildren().forEach(e => {
+        // 적 스폰/미사일 타이머 중지
+        if (this.enemySpawnTimer) this.enemySpawnTimer.paused = true;
+        if (this.missileTimer) this.missileTimer.paused = true;
+
+        // 모든 적과 미사일 완전 제거
+        this.enemies.getChildren().slice().forEach((e) => {
             if (e && e.active) e.destroy();
         });
-        this.enemyMissiles.getChildren().forEach(m => {
-            if (m && m.active) {
-                m.setActive(false).setVisible(false);
-                m.body.stop();
-                m.body.enable = false;
-            }
+        this.enemyMissiles.getChildren().slice().forEach((m) => {
+            if (m && m.active) m.destroy();
         });
 
         const overlay = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000033, 0.5)
             .setDepth(30);
 
-        // 마지막 스테이지인지 확인
         const isLastStage = this.currentStage >= STAGE_CONFIG.length - 1;
 
         const clearText = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 20,
@@ -253,7 +339,6 @@ class GameScene extends Phaser.Scene {
                     bonusText.destroy();
 
                     if (isLastStage) {
-                        // 게임 클리어 → GameOverScene에 클리어 정보 전달
                         this.scene.start('GameOverScene', {
                             score: this.score,
                             stage: this.currentStage + 1,
@@ -263,19 +348,20 @@ class GameScene extends Phaser.Scene {
                         const nextStage = this.currentStage + 1;
                         this.setupStage(nextStage);
                         this.showStageAnnouncement(nextStage);
-                        if (this.stageText) this.stageText.setText(STAGE_CONFIG[nextStage].label);
                     }
                 },
             });
         });
     }
 
-    createUI() {
-        // 상단 UI 배경
+    // ============================================================
+    // UI
+    // ============================================================
+
+    private createUI(): void {
         this.add.rectangle(GAME_WIDTH / 2, 30, GAME_WIDTH - 30, 50, 0x000022, 0.5)
             .setDepth(20).setStrokeStyle(1, 0x4466aa, 0.3);
 
-        // SCORE
         this.add.text(30, 12, 'SCORE:', {
             fontFamily: 'Orbitron, monospace', fontSize: '16px', color: '#8899bb',
         }).setDepth(21);
@@ -283,7 +369,6 @@ class GameScene extends Phaser.Scene {
             fontFamily: 'Orbitron, monospace', fontSize: '26px', fontStyle: 'bold', color: '#ffffff',
         }).setDepth(21);
 
-        // LIVES
         this.add.text(GAME_WIDTH - 130, 12, 'LIVES:', {
             fontFamily: 'Orbitron, monospace', fontSize: '16px', color: '#8899bb',
         }).setDepth(21);
@@ -291,19 +376,16 @@ class GameScene extends Phaser.Scene {
             fontFamily: 'Orbitron, monospace', fontSize: '26px', fontStyle: 'bold', color: '#ffffff',
         }).setDepth(21);
 
-        // STAGE 표시 (중앙)
         this.stageText = this.add.text(GAME_WIDTH / 2, 18, STAGE_CONFIG[0].label, {
             fontFamily: 'Orbitron, monospace', fontSize: '14px', color: '#6688aa',
         }).setOrigin(0.5, 0.5).setDepth(21);
 
-        // 킬 진행 바
         const barW = 200;
-        this.killBarBg = this.add.rectangle(GAME_WIDTH / 2, 38, barW, 6, 0x222244, 0.8)
+        this.add.rectangle(GAME_WIDTH / 2, 38, barW, 6, 0x222244, 0.8)
             .setDepth(21).setStrokeStyle(1, 0x334466, 0.3);
         this.killBarFill = this.add.rectangle(GAME_WIDTH / 2 - barW / 2 + 1, 38, 1, 4, 0x00ccff, 1)
             .setDepth(22).setOrigin(0, 0.5);
 
-        // AMMO 표시
         this.add.text(GAME_WIDTH / 2 + barW / 2 + 15, 30, 'AMMO:', {
             fontFamily: 'Orbitron, monospace', fontSize: '11px', color: '#8899bb',
         }).setDepth(21).setOrigin(0, 0.5);
@@ -312,20 +394,24 @@ class GameScene extends Phaser.Scene {
         }).setDepth(21).setOrigin(0, 0.5);
     }
 
-    spawnInitialClouds() {
+    // ============================================================
+    // 배경
+    // ============================================================
+
+    private spawnInitialClouds(): void {
         const types = ['cloud_big', 'cloud_med', 'cloud_small'];
         for (let i = 0; i < 6; i++) {
             const type = types[Math.floor(Math.random() * types.length)];
             const cloud = this.add.image(
                 Math.random() * (GAME_WIDTH + 100) - 50,
                 Math.random() * GAME_HEIGHT,
-                type
+                type,
             ).setDepth(1).setAlpha(0.4 + Math.random() * 0.3);
             this.clouds.push({ sprite: cloud, speed: Phaser.Math.Between(15, 40) });
         }
     }
 
-    spawnInitialIslands() {
+    private spawnInitialIslands(): void {
         for (let i = 0; i < 2; i++) {
             const x = Math.random() < 0.5 ? Phaser.Math.Between(-20, 80) : Phaser.Math.Between(GAME_WIDTH - 120, GAME_WIDTH + 20);
             const island = this.add.image(x, Phaser.Math.Between(100, GAME_HEIGHT - 200), 'island')
@@ -334,7 +420,11 @@ class GameScene extends Phaser.Scene {
         }
     }
 
-    update(time) {
+    // ============================================================
+    // 메인 루프
+    // ============================================================
+
+    update(time: number): void {
         // 배경 스크롤
         this.background.tilePositionY -= 1.5;
         this.clouds.forEach((c) => {
@@ -356,7 +446,7 @@ class GameScene extends Phaser.Scene {
 
         if (!this.player.active || this.isTransitioning) return;
 
-        // 플레이어 이동 (상하좌우)
+        // 플레이어 이동
         this.player.setVelocity(0);
         if (this.cursors.left.isDown) this.player.setVelocityX(-this.playerSpeed);
         else if (this.cursors.right.isDown) this.player.setVelocityX(this.playerSpeed);
@@ -370,22 +460,30 @@ class GameScene extends Phaser.Scene {
         }
 
         // 정리
-        this.enemies.getChildren().forEach((e) => { if (e.y > GAME_HEIGHT + 50) e.destroy(); });
-        this.enemyMissiles.getChildren().forEach((m) => { if (m.y > GAME_HEIGHT + 20) m.destroy(); });
-        this.bullets.getChildren().forEach((b) => {
-            if (b.active && b.y < -20) { b.setActive(false).setVisible(false); b.body.stop(); }
+        this.enemies.getChildren().slice().forEach((e) => { const s = e as EnemySprite; if (s.y > GAME_HEIGHT + 50) s.destroy(); });
+        this.enemyMissiles.getChildren().slice().forEach((m) => { const s = m as Phaser.Physics.Arcade.Sprite; if (s.y > GAME_HEIGHT + 20) s.destroy(); });
+        this.bullets.getChildren().slice().forEach((b) => {
+            const sprite = b as Phaser.Physics.Arcade.Sprite;
+            if (sprite.active && sprite.y < -20) {
+                sprite.setActive(false).setVisible(false);
+                sprite.body?.stop();
+            }
         });
     }
 
-    fireBullet() {
+    // ============================================================
+    // 전투 로직
+    // ============================================================
+
+    private fireBullet(): void {
         let shotsUsed = 0;
         if (this.bulletCount === 1) {
-            const b = this.bullets.get(this.player.x, this.player.y - 30);
-            if (b) { b.setActive(true).setVisible(true); b.body.enable = true; b.setVelocityY(this.bulletSpeed); b.setDepth(5); shotsUsed = 1; }
+            const b = this.bullets.get(this.player.x, this.player.y - 30) as Phaser.Physics.Arcade.Sprite | null;
+            if (b) { b.setActive(true).setVisible(true); b.body!.enable = true; b.setVelocityY(this.bulletSpeed); b.setDepth(5); shotsUsed = 1; }
         } else if (this.bulletCount === 2) {
             [-8, 8].forEach((ox) => {
-                const b = this.bullets.get(this.player.x + ox, this.player.y - 30);
-                if (b) { b.setActive(true).setVisible(true); b.body.enable = true; b.setVelocityY(this.bulletSpeed); b.setDepth(5); shotsUsed++; }
+                const b = this.bullets.get(this.player.x + ox, this.player.y - 30) as Phaser.Physics.Arcade.Sprite | null;
+                if (b) { b.setActive(true).setVisible(true); b.body!.enable = true; b.setVelocityY(this.bulletSpeed); b.setDepth(5); shotsUsed++; }
             });
         } else if (this.bulletCount === 3) {
             const offsets = [
@@ -394,13 +492,12 @@ class GameScene extends Phaser.Scene {
                 { x: 10, vx: 60, vy: this.bulletSpeed },
             ];
             offsets.forEach(({ x, vx, vy }) => {
-                const b = this.bullets.get(this.player.x + x, this.player.y - 30);
-                if (b) { b.setActive(true).setVisible(true); b.body.enable = true; b.setVelocity(vx, vy); b.setDepth(5); shotsUsed++; }
+                const b = this.bullets.get(this.player.x + x, this.player.y - 30) as Phaser.Physics.Arcade.Sprite | null;
+                if (b) { b.setActive(true).setVisible(true); b.body!.enable = true; b.setVelocity(vx, vy); b.setDepth(5); shotsUsed++; }
             });
         }
         this.ammo = Math.max(0, this.ammo - shotsUsed);
         if (this.ammoText) this.ammoText.setText(`${this.ammo}/${this.maxAmmo}`);
-        // 탄약 색상 업데이트
         if (this.ammoText) {
             if (this.ammo <= 50) this.ammoText.setColor('#ff4444');
             else if (this.ammo <= 100) this.ammoText.setColor('#ffaa00');
@@ -408,11 +505,11 @@ class GameScene extends Phaser.Scene {
         }
     }
 
-    spawnEnemy() {
+    private spawnEnemy(): void {
         if (this.isTransitioning || this.bossActive) return;
         const cfg = STAGE_CONFIG[this.currentStage];
         const x = Phaser.Math.Between(40, GAME_WIDTH - 40);
-        const enemy = this.enemies.create(x, -40, 'enemy');
+        const enemy = this.enemies.create(x, -40, 'enemy') as EnemySprite;
         enemy.setVelocityY(Phaser.Math.Between(cfg.enemySpeed[0], cfg.enemySpeed[1]));
         enemy.hp = cfg.enemyHP;
         enemy.setDepth(5);
@@ -424,67 +521,64 @@ class GameScene extends Phaser.Scene {
         });
     }
 
-    enemyFire() {
+    private enemyFire(): void {
         if (this.isTransitioning) return;
         const cfg = STAGE_CONFIG[this.currentStage];
-        const activeEnemies = this.enemies.getChildren().filter(e => e.active && !e.isBoss && e.y > 0 && e.y < GAME_HEIGHT - 100);
+        const activeEnemies = (this.enemies.getChildren() as EnemySprite[]).filter(
+            (e) => e.active && !e.isBoss && e.y > 0 && e.y < GAME_HEIGHT - 100,
+        );
         activeEnemies.forEach((enemy) => {
             if (Math.random() < cfg.missileChance) {
                 this.fireEnemyMissile(enemy.x, enemy.y + 24, cfg);
             }
         });
-        // 보스 사격
         if (this.bossActive && this.boss && this.boss.active) {
             this.fireBossMissiles(cfg);
         }
     }
 
-    fireEnemyMissile(x, y, cfg) {
-        const missile = this.enemyMissiles.get(x, y);
+    private fireEnemyMissile(x: number, y: number, cfg: StageConfig): void {
+        const missile = this.enemyMissiles.get(x, y) as Phaser.Physics.Arcade.Sprite | null;
         if (!missile) return;
         missile.setActive(true).setVisible(true);
-        missile.body.enable = true;
+        missile.body!.enable = true;
         missile.setDepth(5);
         const speed = Phaser.Math.Between(cfg.missileSpeed[0], cfg.missileSpeed[1]);
         const roll = Math.random();
         if (roll < cfg.aimedChance && this.player.active) {
-            // 조준 미사일: 플레이어를 향해 발사
             const angle = Phaser.Math.Angle.Between(x, y, this.player.x, this.player.y);
             missile.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
         } else if (roll < cfg.aimedChance + cfg.diagonalChance) {
-            // 대각선 미사일
             const vx = Phaser.Math.Between(-180, 180);
             missile.setVelocity(vx, speed);
         } else {
-            // 직선 미사일
             missile.setVelocityY(speed);
         }
     }
 
-    fireBossMissiles(cfg) {
+    private fireBossMissiles(cfg: StageConfig): void {
+        if (!this.boss) return;
         const boss = this.boss;
         const speed = Phaser.Math.Between(cfg.missileSpeed[0], cfg.missileSpeed[1]) * 1.1;
-        // 5~7발 부채꼴 발사
         const bulletCount = 5 + Math.floor(this.currentStage / 2);
         const spread = 60 + this.currentStage * 10;
         const startAngle = 90 - spread / 2;
         for (let i = 0; i < bulletCount; i++) {
             const angleDeg = startAngle + (spread / (bulletCount - 1)) * i;
             const angleRad = Phaser.Math.DegToRad(angleDeg);
-            const missile = this.enemyMissiles.get(boss.x, boss.y + 50);
+            const missile = this.enemyMissiles.get(boss.x, boss.y + 50) as Phaser.Physics.Arcade.Sprite | null;
             if (missile) {
                 missile.setActive(true).setVisible(true);
-                missile.body.enable = true;
+                missile.body!.enable = true;
                 missile.setDepth(5);
                 missile.setVelocity(Math.cos(angleRad) * speed, Math.sin(angleRad) * speed);
             }
         }
-        // 추가: 가끔 조준탄
         if (Math.random() < 0.4 && this.player.active) {
-            const aimed = this.enemyMissiles.get(boss.x, boss.y + 50);
+            const aimed = this.enemyMissiles.get(boss.x, boss.y + 50) as Phaser.Physics.Arcade.Sprite | null;
             if (aimed) {
                 aimed.setActive(true).setVisible(true);
-                aimed.body.enable = true;
+                aimed.body!.enable = true;
                 aimed.setDepth(5);
                 const angle = Phaser.Math.Angle.Between(boss.x, boss.y, this.player.x, this.player.y);
                 aimed.setVelocity(Math.cos(angle) * speed * 1.2, Math.sin(angle) * speed * 1.2);
@@ -492,15 +586,22 @@ class GameScene extends Phaser.Scene {
         }
     }
 
-    hitEnemy(bullet, enemy) {
+    // ============================================================
+    // 충돌 처리
+    // ============================================================
+
+    private hitEnemy(_bullet: Phaser.GameObjects.GameObject, _enemy: Phaser.GameObjects.GameObject): void {
+        const bullet = _bullet as Phaser.Physics.Arcade.Sprite;
+        const enemy = _enemy as EnemySprite;
+
         bullet.setActive(false).setVisible(false);
-        bullet.body.stop(); bullet.body.enable = false;
+        bullet.body?.stop();
+        if (bullet.body) bullet.body.enable = false;
         enemy.hp--;
 
         // 보스 피격 처리
         if (enemy.isBoss) {
             this.updateBossHPBar();
-            // 피격 플래시
             this.tweens.add({ targets: enemy, alpha: 0.4, duration: 40, yoyo: true });
             this.cameras.main.shake(80, 0.003);
             if (enemy.hp <= 0) {
@@ -515,14 +616,12 @@ class GameScene extends Phaser.Scene {
             this.score += 100;
             this.scoreText.setText(this.score.toString());
 
-            // 스테이지 킬 카운트
             if (!this.bossActive) {
                 this.stageKills++;
                 const cfg = STAGE_CONFIG[this.currentStage];
                 const ratio = Math.min(1, this.stageKills / cfg.killsToAdvance);
                 this.killBarFill.setSize(Math.max(1, ratio * 198), 4);
 
-                // 킬 목표 달성 → 보스 소환
                 if (this.stageKills >= cfg.killsToAdvance) {
                     this.spawnBoss();
                 }
@@ -532,15 +631,20 @@ class GameScene extends Phaser.Scene {
         }
     }
 
-    spawnBoss() {
+    // ============================================================
+    // 보스 관리
+    // ============================================================
+
+    private spawnBoss(): void {
         this.bossActive = true;
         const cfg = STAGE_CONFIG[this.currentStage];
 
-        // 기존 적 제거 (보스전 집중)
-        this.enemies.getChildren().forEach(e => {
-            if (e && e.active && !e.isBoss) {
-                this.createExplosion(e.x, e.y);
-                e.destroy();
+        // 기존 적 제거
+        this.enemies.getChildren().slice().forEach((e) => {
+            const enemy = e as EnemySprite;
+            if (enemy && enemy.active && !enemy.isBoss) {
+                this.createExplosion(enemy.x, enemy.y);
+                enemy.destroy();
             }
         });
 
@@ -555,20 +659,18 @@ class GameScene extends Phaser.Scene {
         });
         this.cameras.main.shake(400, 0.008);
 
-        // 보스 생성 (위에서 등장)
+        // 보스 생성
         this.time.delayedCall(1500, () => {
-            this.boss = this.enemies.create(GAME_WIDTH / 2, -80, 'boss');
+            this.boss = this.enemies.create(GAME_WIDTH / 2, -80, 'boss') as EnemySprite;
             this.boss.hp = cfg.bossHP;
             this.boss.maxHP = cfg.bossHP;
             this.boss.isBoss = true;
             this.boss.setDepth(8);
             this.boss.setScale(1.3);
 
-            // 등장 애니메이션
             this.tweens.add({
                 targets: this.boss, y: 120, duration: 2000, ease: 'Power2',
                 onComplete: () => {
-                    // 좌우 이동
                     if (this.boss && this.boss.active) {
                         this.tweens.add({
                             targets: this.boss,
@@ -579,7 +681,7 @@ class GameScene extends Phaser.Scene {
                 },
             });
 
-            // 보스 HP 바 (화면 상단)
+            // 보스 HP 바
             this.bossNameText = this.add.text(GAME_WIDTH / 2, 65, `BOSS - ${cfg.subtitle}`, {
                 fontFamily: 'Orbitron, monospace', fontSize: '12px', color: '#ff6666',
             }).setOrigin(0.5).setDepth(21);
@@ -591,18 +693,24 @@ class GameScene extends Phaser.Scene {
         });
     }
 
-    updateBossHPBar() {
+    private updateBossHPBar(): void {
         if (!this.boss || !this.bossHPBar) return;
-        const ratio = Math.max(0, this.boss.hp / this.boss.maxHP);
+        const ratio = Math.max(0, this.boss.hp / (this.boss.maxHP ?? 1));
         this.bossHPBar.setSize(Math.max(1, ratio * 298), 8);
-        // 체력에 따라 색 변경
         if (ratio < 0.3) this.bossHPBar.setFillStyle(0xff0000, 1);
         else if (ratio < 0.6) this.bossHPBar.setFillStyle(0xff6600, 1);
     }
 
-    bossDefeated() {
-        // 보스 전투 종료 표시
-        this.isTransitioning = true;
+    private bossDefeated(): void {
+        // ★ 가드: 이미 보스 처치 시퀀스가 진행 중이면 중복 호출 무시
+        if (this.isBossDefeating) return;
+        this.isBossDefeating = true;
+        this.isTransitioning = true;  // 플레이어 액션 차단 (사격/이동)
+        this.bossActive = false;
+
+        // 타이머 일시 중지
+        if (this.enemySpawnTimer) this.enemySpawnTimer.paused = true;
+        if (this.missileTimer) this.missileTimer.paused = true;
 
         // 큰 폭발 연출
         for (let i = 0; i < 5; i++) {
@@ -617,7 +725,6 @@ class GameScene extends Phaser.Scene {
         this.time.delayedCall(1000, () => {
             if (this.boss) {
                 this.createExplosion(this.boss.x, this.boss.y);
-                // 추가 대형 폭발
                 const bigExp = this.add.image(this.boss.x, this.boss.y, 'explosion').setDepth(15).setScale(1);
                 this.tweens.add({ targets: bigExp, scale: 4, alpha: 0, duration: 800, onComplete: () => bigExp.destroy() });
                 this.cameras.main.shake(500, 0.02);
@@ -629,29 +736,35 @@ class GameScene extends Phaser.Scene {
             if (this.bossHPBar) { this.bossHPBar.destroy(); this.bossHPBar = null; }
             if (this.bossHPBarBg) { this.bossHPBarBg.destroy(); this.bossHPBarBg = null; }
             if (this.bossNameText) { this.bossNameText.destroy(); this.bossNameText = null; }
-            this.bossActive = false;
             this.score += 2000;
             this.scoreText.setText(this.score.toString());
             this.showStageClear();
         });
     }
 
-    playerHit(player, missile) {
+    // ============================================================
+    // 플레이어 피격
+    // ============================================================
+
+    private playerHit(_player: Phaser.GameObjects.GameObject, _missile: Phaser.GameObjects.GameObject): void {
         if (this.isInvincible || this.isTransitioning) return;
+        const missile = _missile as Phaser.Physics.Arcade.Sprite;
         missile.setActive(false).setVisible(false);
-        missile.body.stop(); missile.body.enable = false;
+        missile.body?.stop();
+        if (missile.body) missile.body.enable = false;
         this.takeDamage();
     }
 
-    playerHitByEnemy(player, enemy) {
+    private playerHitByEnemy(_player: Phaser.GameObjects.GameObject, _enemy: Phaser.GameObjects.GameObject): void {
         if (this.isInvincible || this.isTransitioning) return;
-        if (enemy.isBoss) return; // 보스와 직접 충돌 무시 (미사일로만 피격)
+        const enemy = _enemy as EnemySprite;
+        if (enemy.isBoss) return;
         this.createExplosion(enemy.x, enemy.y);
         enemy.destroy();
         this.takeDamage();
     }
 
-    takeDamage() {
+    private takeDamage(): void {
         this.lives--;
         this.livesText.setText(this.lives.toString());
         this.cameras.main.shake(200, 0.01);
@@ -669,7 +782,6 @@ class GameScene extends Phaser.Scene {
             });
         } else {
             this.isInvincible = true;
-            // 탄약 리셋
             this.ammo = this.maxAmmo;
             if (this.ammoText) {
                 this.ammoText.setText(`${this.ammo}/${this.maxAmmo}`);
@@ -682,7 +794,11 @@ class GameScene extends Phaser.Scene {
         }
     }
 
-    createExplosion(x, y) {
+    // ============================================================
+    // 이펙트
+    // ============================================================
+
+    private createExplosion(x: number, y: number): void {
         const exp = this.add.image(x, y, 'explosion').setDepth(15).setScale(0.5);
         this.tweens.add({ targets: exp, scale: 1.8, alpha: 0, duration: 400, onComplete: () => exp.destroy() });
         const particles = this.add.particles(x, y, 'particle', {

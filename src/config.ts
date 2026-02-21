@@ -1,12 +1,12 @@
 // ============================================================
 // Sky Fighter - 게임 설정 및 상수
 // ============================================================
+import type { PlaneData, PlaneKey, StageConfig } from './types';
 
-const GAME_WIDTH = window.innerWidth;
-const GAME_HEIGHT = window.innerHeight;
+export const GAME_WIDTH: number = window.innerWidth;
+export const GAME_HEIGHT: number = window.innerHeight;
 
-// 비행기 스탯 정의
-const PLANE_DATA = {
+export const PLANE_DATA: Record<PlaneKey, PlaneData> = {
     falcon: {
         name: 'FALCON',
         desc: '균형잡힌 전투기',
@@ -59,8 +59,7 @@ const PLANE_DATA = {
     },
 };
 
-// 스테이지 설정
-const STAGE_CONFIG = [
+export const STAGE_CONFIG: StageConfig[] = [
     { // Stage 1 - 입문
         enemySpawnDelay: 1600,
         missileDelay: 2200,

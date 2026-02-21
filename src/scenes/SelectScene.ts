@@ -1,10 +1,24 @@
 // ============================================================
 // SelectScene - 비행기 선택 화면
 // ============================================================
-class SelectScene extends Phaser.Scene {
-    constructor() { super('SelectScene'); }
+import Phaser from 'phaser';
+import { GAME_WIDTH, GAME_HEIGHT, PLANE_DATA } from '../config';
+import type { PlaneKey } from '../types';
 
-    create() {
+interface PlaneCard {
+    cardBg: Phaser.GameObjects.Rectangle;
+    glow: Phaser.GameObjects.Rectangle;
+    plane: Phaser.GameObjects.Image;
+}
+
+export class SelectScene extends Phaser.Scene {
+    private planeCards: PlaneCard[] = [];
+
+    constructor() {
+        super('SelectScene');
+    }
+
+    create(): void {
         // 배경
         this.add.tileSprite(0, 0, GAME_WIDTH, GAME_HEIGHT, 'bg').setOrigin(0, 0);
 
@@ -28,7 +42,7 @@ class SelectScene extends Phaser.Scene {
         // 구분선
         this.add.rectangle(GAME_WIDTH / 2, 148, 500, 2, 0x4466aa, 0.5);
 
-        const planes = Object.keys(PLANE_DATA);
+        const planes = Object.keys(PLANE_DATA) as PlaneKey[];
         const maxCardW = Math.min(200, (GAME_WIDTH - 80) / planes.length - 20);
         const cardWidth = Math.max(140, maxCardW);
         const cardSpacing = Math.max(10, Math.min(25, (GAME_WIDTH - planes.length * cardWidth) / (planes.length + 1)));
@@ -42,15 +56,12 @@ class SelectScene extends Phaser.Scene {
             const cx = startX + i * (cardWidth + cardSpacing);
             const cy = 350;
 
-            // 카드 배경
             const cardBg = this.add.rectangle(cx, cy, cardWidth, 320, 0x111133, 0.7)
                 .setStrokeStyle(2, 0x3355aa, 0.6)
                 .setInteractive({ useHandCursor: true });
 
-            // 비행기 이미지
             const plane = this.add.image(cx, cy - 90, `plane_${key}`).setScale(2);
 
-            // 이름
             this.add.text(cx, cy - 30, data.name, {
                 fontFamily: 'Orbitron, monospace',
                 fontSize: '22px',
@@ -58,20 +69,17 @@ class SelectScene extends Phaser.Scene {
                 color: '#ffffff',
             }).setOrigin(0.5);
 
-            // 설명
             this.add.text(cx, cy, data.desc, {
                 fontFamily: 'sans-serif',
                 fontSize: '14px',
                 color: '#8899bb',
             }).setOrigin(0.5);
 
-            // 스탯 바
             const statY = cy + 35;
             this.drawStatBar(cx, statY, '속도', data.speed / 600, cardWidth);
             this.drawStatBar(cx, statY + 35, '화력', data.bulletCount / 3, cardWidth);
             this.drawStatBar(cx, statY + 70, '내구', data.lives / 5, cardWidth);
 
-            // 호버 & 클릭
             const glow = this.add.rectangle(cx, cy, cardWidth + 4, 324, 0x00ccff, 0)
                 .setStrokeStyle(2, 0x00ccff, 0);
 
@@ -112,13 +120,13 @@ class SelectScene extends Phaser.Scene {
             color: '#66aacc',
         }).setOrigin(0.5);
 
-        const controls = [
+        const controls: [string, string][] = [
             ['↑ ↓ ← →', '비행기 이동'],
             ['SPACE', '총알 발사'],
         ];
-        controls.forEach(([key, desc], i) => {
+        controls.forEach(([keyLabel, desc], i) => {
             const y = helpY + 55 + i * 32;
-            this.add.text(GAME_WIDTH / 2 - 60, y, key, {
+            this.add.text(GAME_WIDTH / 2 - 60, y, keyLabel, {
                 fontFamily: 'Orbitron, monospace',
                 fontSize: '15px',
                 color: '#00ccff',
@@ -131,16 +139,14 @@ class SelectScene extends Phaser.Scene {
         });
     }
 
-    drawStatBar(cx, y, label, ratio, cardWidth) {
+    private drawStatBar(cx: number, y: number, label: string, ratio: number, cardWidth: number): void {
         const barW = Math.min(140, cardWidth - 10);
         this.add.text(cx - barW / 2, y, label, {
             fontFamily: 'sans-serif',
             fontSize: '12px',
             color: '#6688aa',
         }).setOrigin(0, 0.5);
-        // 배경
         this.add.rectangle(cx + 25, y, barW - 50, 8, 0x222244, 0.8).setStrokeStyle(1, 0x334466, 0.5);
-        // 채움
         const fillW = Math.max(2, (barW - 52) * ratio);
         const color = ratio > 0.7 ? 0x00ff88 : ratio > 0.4 ? 0xffcc00 : 0xff6644;
         this.add.rectangle(cx + 25 - (barW - 52) / 2 + fillW / 2, y, fillW, 6, color, 1);

@@ -1,16 +1,26 @@
 // ============================================================
 // GameOverScene - 게임 오버 / 게임 클리어 화면
 // ============================================================
-class GameOverScene extends Phaser.Scene {
-    constructor() { super('GameOverScene'); }
+import Phaser from 'phaser';
+import { GAME_WIDTH, GAME_HEIGHT } from '../config';
+import type { GameOverSceneInitData } from '../types';
 
-    init(data) {
+export class GameOverScene extends Phaser.Scene {
+    private finalScore: number = 0;
+    private finalStage: number = 1;
+    private cleared: boolean = false;
+
+    constructor() {
+        super('GameOverScene');
+    }
+
+    init(data: GameOverSceneInitData): void {
         this.finalScore = data.score || 0;
         this.finalStage = data.stage || 1;
         this.cleared = data.cleared || false;
     }
 
-    create() {
+    create(): void {
         this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x0a0520, 0.92);
         this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 170, 300, 2, 0x4466aa, 0.4);
 
@@ -26,7 +36,6 @@ class GameOverScene extends Phaser.Scene {
 
         this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 90, 300, 2, 0x4466aa, 0.4);
 
-        // 도달 스테이지
         const stageMessage = this.cleared
             ? '모든 스테이지를 클리어했습니다!'
             : `도달 스테이지: ${this.finalStage}`;
@@ -46,7 +55,7 @@ class GameOverScene extends Phaser.Scene {
 
         this.tweens.addCounter({
             from: 0, to: this.finalScore, duration: 1500, ease: 'Power2',
-            onUpdate: (tween) => { scoreDisplay.setText(Math.round(tween.getValue()).toString()); },
+            onUpdate: (tween) => { scoreDisplay.setText(Math.round(tween.getValue() ?? 0).toString()); },
         });
 
         this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 60, 300, 2, 0x4466aa, 0.4);
@@ -73,7 +82,7 @@ class GameOverScene extends Phaser.Scene {
         selectBtnBg.on('pointerout', () => { selectBtnBg.setFillStyle(0x112233, 0.6); selectBtnText.setColor('#6699cc'); });
         selectBtnBg.on('pointerdown', () => this.scene.start('SelectScene'));
 
-        this.input.keyboard.once('keydown-SPACE', () => this.scene.start('SelectScene'));
+        this.input.keyboard?.once('keydown-SPACE', () => this.scene.start('SelectScene'));
 
         this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 220, 'Press SPACE to continue', {
             fontFamily: 'Orbitron, monospace', fontSize: '11px', color: '#445566',

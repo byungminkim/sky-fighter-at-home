@@ -2,7 +2,7 @@
 // GameOverScene - 게임 오버 / 게임 클리어 화면
 // ============================================================
 import Phaser from 'phaser';
-import { GAME_WIDTH, GAME_HEIGHT } from '../config';
+import { GAME_WIDTH, GAME_HEIGHT, updateGameSize } from '../config';
 import type { GameOverSceneInitData } from '../types';
 
 export class GameOverScene extends Phaser.Scene {
@@ -21,6 +21,7 @@ export class GameOverScene extends Phaser.Scene {
     }
 
     create(): void {
+        updateGameSize(this);
         this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x0a0520, 0.92);
         this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 170, 300, 2, 0x4466aa, 0.4);
 

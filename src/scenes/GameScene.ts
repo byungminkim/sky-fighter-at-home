@@ -2,7 +2,7 @@
 // GameScene - 메인 게임 (5단계 스테이지)
 // ============================================================
 import Phaser from 'phaser';
-import { GAME_WIDTH, GAME_HEIGHT, PLANE_DATA, STAGE_CONFIG } from '../config';
+import { GAME_WIDTH, GAME_HEIGHT, PLANE_DATA, STAGE_CONFIG, updateGameSize } from '../config';
 import type { EnemySprite, GameSceneInitData, PlaneKey, StageConfig } from '../types';
 
 interface CloudObj {
@@ -94,6 +94,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     create(): void {
+        updateGameSize(this);
         const planeData = PLANE_DATA[this.selectedPlane];
 
         // ---- 배경 ----
@@ -376,39 +377,57 @@ export class GameScene extends Phaser.Scene {
     // ============================================================
 
     private createUI(): void {
-        this.add.rectangle(GAME_WIDTH / 2, 30, GAME_WIDTH - 30, 50, 0x000022, 0.5)
+        const isMobile = GAME_WIDTH < 500;
+        const hudH = isMobile ? 70 : 50;
+        const hudY = isMobile ? 40 : 30;
+        const labelSize = isMobile ? '12px' : '16px';
+        const valueSize = isMobile ? '20px' : '26px';
+        const stageSize = isMobile ? '12px' : '14px';
+        const padX = isMobile ? 16 : 30;
+
+        this.add.rectangle(GAME_WIDTH / 2, hudY, GAME_WIDTH - 20, hudH, 0x000022, 0.5)
             .setDepth(20).setStrokeStyle(1, 0x4466aa, 0.3);
 
-        this.add.text(30, 12, 'SCORE:', {
-            fontFamily: 'Orbitron, monospace', fontSize: '16px', color: '#8899bb',
+        const topLabelY = isMobile ? 10 : 12;
+        const topValueY = isMobile ? 6 : 8;
+
+        this.add.text(padX, topLabelY, 'SCORE:', {
+            fontFamily: 'Orbitron, monospace', fontSize: labelSize, color: '#8899bb',
         }).setDepth(21);
-        this.scoreText = this.add.text(110, 8, '0', {
-            fontFamily: 'Orbitron, monospace', fontSize: '26px', fontStyle: 'bold', color: '#ffffff',
+        this.scoreText = this.add.text(padX + (isMobile ? 62 : 80), topValueY, '0', {
+            fontFamily: 'Orbitron, monospace', fontSize: valueSize, fontStyle: 'bold', color: '#ffffff',
         }).setDepth(21);
 
-        this.add.text(GAME_WIDTH - 130, 12, 'LIVES:', {
-            fontFamily: 'Orbitron, monospace', fontSize: '16px', color: '#8899bb',
+        const livesLabelX = GAME_WIDTH - (isMobile ? 98 : 130);
+        const livesValueX = GAME_WIDTH - (isMobile ? 44 : 55);
+        this.add.text(livesLabelX, topLabelY, 'LIVES:', {
+            fontFamily: 'Orbitron, monospace', fontSize: labelSize, color: '#8899bb',
         }).setDepth(21);
-        this.livesText = this.add.text(GAME_WIDTH - 55, 8, this.lives.toString(), {
-            fontFamily: 'Orbitron, monospace', fontSize: '26px', fontStyle: 'bold', color: '#ffffff',
+        this.livesText = this.add.text(livesValueX, topValueY, this.lives.toString(), {
+            fontFamily: 'Orbitron, monospace', fontSize: valueSize, fontStyle: 'bold', color: '#ffffff',
         }).setDepth(21);
 
-        this.stageText = this.add.text(GAME_WIDTH / 2, 18, STAGE_CONFIG[0].label, {
-            fontFamily: 'Orbitron, monospace', fontSize: '14px', color: '#6688aa',
+        const stageY = isMobile ? 30 : 18;
+        this.stageText = this.add.text(GAME_WIDTH / 2, stageY, STAGE_CONFIG[0].label, {
+            fontFamily: 'Orbitron, monospace', fontSize: stageSize, color: '#6688aa',
         }).setOrigin(0.5, 0.5).setDepth(21);
 
-        const barW = 200;
-        this.add.rectangle(GAME_WIDTH / 2, 38, barW, 6, 0x222244, 0.8)
+        const barW = isMobile ? Math.min(160, GAME_WIDTH - 140) : 200;
+        const barY = isMobile ? 48 : 38;
+        this.add.rectangle(GAME_WIDTH / 2, barY, barW, 6, 0x222244, 0.8)
             .setDepth(21).setStrokeStyle(1, 0x334466, 0.3);
-        this.killBarFill = this.add.rectangle(GAME_WIDTH / 2 - barW / 2 + 1, 38, 1, 4, 0x00ccff, 1)
+        this.killBarFill = this.add.rectangle(GAME_WIDTH / 2 - barW / 2 + 1, barY, 1, 4, 0x00ccff, 1)
             .setDepth(22).setOrigin(0, 0.5);
 
-        this.add.text(GAME_WIDTH / 2 + barW / 2 + 15, 30, 'AMMO:', {
-            fontFamily: 'Orbitron, monospace', fontSize: '11px', color: '#8899bb',
-        }).setDepth(21).setOrigin(0, 0.5);
-        this.ammoText = this.add.text(GAME_WIDTH / 2 + barW / 2 + 65, 30, `${this.ammo}/${this.maxAmmo}`, {
-            fontFamily: 'Orbitron, monospace', fontSize: '14px', fontStyle: 'bold', color: '#ffffff',
-        }).setDepth(21).setOrigin(0, 0.5);
+        const ammoY = isMobile ? 60 : 30;
+        const ammoLabelX = isMobile ? GAME_WIDTH - padX - 52 : GAME_WIDTH / 2 + barW / 2 + 15;
+        const ammoValueX = isMobile ? GAME_WIDTH - padX : GAME_WIDTH / 2 + barW / 2 + 65;
+        this.add.text(ammoLabelX, ammoY, 'AMMO:', {
+            fontFamily: 'Orbitron, monospace', fontSize: isMobile ? '10px' : '11px', color: '#8899bb',
+        }).setDepth(21).setOrigin(isMobile ? 1 : 0, 0.5);
+        this.ammoText = this.add.text(ammoValueX, ammoY, `${this.ammo}/${this.maxAmmo}`, {
+            fontFamily: 'Orbitron, monospace', fontSize: isMobile ? '12px' : '14px', fontStyle: 'bold', color: '#ffffff',
+        }).setDepth(21).setOrigin(isMobile ? 1 : 0, 0.5);
     }
 
     private createTouchControls(): void {

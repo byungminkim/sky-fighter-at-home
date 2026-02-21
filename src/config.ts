@@ -1,15 +1,18 @@
-// ============================================================
-// Sky Fighter - 게임 설정 및 상수
-// ============================================================
 import type { PlaneData, PlaneKey, StageConfig } from './types';
 
-export const GAME_WIDTH: number = window.innerWidth;
-export const GAME_HEIGHT: number = window.innerHeight;
+export let GAME_WIDTH: number = window.innerWidth;
+export let GAME_HEIGHT: number = window.innerHeight;
+
+/** 씬의 create()에서 호출하여 현재 캔버스 크기로 갱신 */
+export function updateGameSize(scene: Phaser.Scene): void {
+    GAME_WIDTH = scene.scale.width;
+    GAME_HEIGHT = scene.scale.height;
+}
 
 export const PLANE_DATA: Record<PlaneKey, PlaneData> = {
     falcon: {
         name: 'FALCON',
-        desc: '균형잡힌 전투기',
+        desc: '시은 전투기',
         speed: 450,
         fireRate: 160,
         lives: 3,
@@ -19,7 +22,7 @@ export const PLANE_DATA: Record<PlaneKey, PlaneData> = {
     },
     thunder: {
         name: 'THUNDER',
-        desc: '강력한 화력의 폭격기',
+        desc: '엄마 폭격기',
         speed: 350,
         fireRate: 220,
         lives: 5,
@@ -29,7 +32,7 @@ export const PLANE_DATA: Record<PlaneKey, PlaneData> = {
     },
     phantom: {
         name: 'PHANTOM',
-        desc: '빠른 경량 전투기',
+        desc: '주아 전투기',
         speed: 600,
         fireRate: 100,
         lives: 2,
@@ -39,7 +42,7 @@ export const PLANE_DATA: Record<PlaneKey, PlaneData> = {
     },
     viper: {
         name: 'VIPER',
-        desc: '독사처럼 빠른 요격기',
+        desc: '수인 요격기',
         speed: 550,
         fireRate: 130,
         lives: 2,
@@ -49,7 +52,7 @@ export const PLANE_DATA: Record<PlaneKey, PlaneData> = {
     },
     raptor: {
         name: 'RAPTOR',
-        desc: '최신예 스텔스 전투기',
+        desc: '아빠 최신 전투기',
         speed: 480,
         fireRate: 140,
         lives: 4,

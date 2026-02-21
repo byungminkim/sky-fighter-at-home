@@ -11,6 +11,11 @@ body {
     background: #050310;
     font-family: 'Orbitron', 'Segoe UI', sans-serif;
     overflow: hidden;
+    touch-action: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    overscroll-behavior: none;
 }
 
 #game-container {

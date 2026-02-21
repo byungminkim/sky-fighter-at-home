@@ -2,7 +2,7 @@
 // BootScene - 에셋 생성
 // ============================================================
 import Phaser from 'phaser';
-import { GAME_WIDTH, GAME_HEIGHT, PLANE_DATA } from '../config';
+import { GAME_WIDTH, GAME_HEIGHT, PLANE_DATA, updateGameSize } from '../config';
 import type { PlaneColor, PlaneKey } from '../types';
 
 export class BootScene extends Phaser.Scene {
@@ -11,6 +11,7 @@ export class BootScene extends Phaser.Scene {
     }
 
     create(): void {
+        updateGameSize(this);
         // 모든 비행기 텍스처 생성
         (Object.keys(PLANE_DATA) as PlaneKey[]).forEach((key) => {
             this.createPlaneTexture(key, PLANE_DATA[key].color, key === 'thunder' || key === 'raptor');

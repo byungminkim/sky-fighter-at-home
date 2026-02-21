@@ -2,7 +2,7 @@
 // SelectScene - 비행기 선택 화면
 // ============================================================
 import Phaser from 'phaser';
-import { GAME_WIDTH, GAME_HEIGHT, PLANE_DATA } from '../config';
+import { GAME_WIDTH, GAME_HEIGHT, PLANE_DATA, updateGameSize } from '../config';
 import type { PlaneKey } from '../types';
 
 interface PlaneCard {
@@ -19,68 +19,83 @@ export class SelectScene extends Phaser.Scene {
     }
 
     create(): void {
+        updateGameSize(this);
+
         // 배경
         this.add.tileSprite(0, 0, GAME_WIDTH, GAME_HEIGHT, 'bg').setOrigin(0, 0);
 
+        const isMobile = GAME_WIDTH < 500;
+
         // 타이틀
-        this.add.text(GAME_WIDTH / 2, 70, 'SKY FIGHTER', {
+        this.add.text(GAME_WIDTH / 2, isMobile ? 50 : 70, 'SKY FIGHTER', {
             fontFamily: 'Orbitron, monospace',
-            fontSize: '52px',
+            fontSize: isMobile ? '28px' : '52px',
             fontStyle: 'bold',
             color: '#00ccff',
             stroke: '#002244',
-            strokeThickness: 4,
+            strokeThickness: isMobile ? 2 : 4,
         }).setOrigin(0.5);
 
         // 서브타이틀
-        this.add.text(GAME_WIDTH / 2, 120, '전투기를 선택하세요', {
+        this.add.text(GAME_WIDTH / 2, isMobile ? 85 : 120, '전투기를 선택하세요', {
             fontFamily: 'Orbitron, monospace',
-            fontSize: '18px',
+            fontSize: isMobile ? '13px' : '18px',
             color: '#8899bb',
         }).setOrigin(0.5);
 
         // 구분선
-        this.add.rectangle(GAME_WIDTH / 2, 148, 500, 2, 0x4466aa, 0.5);
+        this.add.rectangle(GAME_WIDTH / 2, isMobile ? 100 : 148, Math.min(500, GAME_WIDTH - 40), 2, 0x4466aa, 0.5);
 
         const planes = Object.keys(PLANE_DATA) as PlaneKey[];
-        const maxCardW = Math.min(200, (GAME_WIDTH - 80) / planes.length - 20);
-        const cardWidth = Math.max(140, maxCardW);
-        const cardSpacing = Math.max(10, Math.min(25, (GAME_WIDTH - planes.length * cardWidth) / (planes.length + 1)));
-        const totalWidth = planes.length * cardWidth + (planes.length - 1) * cardSpacing;
+        const mobileRows = isMobile ? 2 : 1;
+        const mobileCols = isMobile ? Math.ceil(planes.length / mobileRows) : planes.length;
+        const maxCardW = Math.min(190, (GAME_WIDTH - 32) / mobileCols - 6);
+        const cardWidth = Math.max(56, maxCardW);
+        const cardSpacing = Math.max(6, Math.min(18, (GAME_WIDTH - mobileCols * cardWidth) / (mobileCols + 1)));
+        const totalWidth = mobileCols * cardWidth + (mobileCols - 1) * cardSpacing;
         const startX = (GAME_WIDTH - totalWidth) / 2 + cardWidth / 2;
+        const cardH = isMobile ? 190 : 320;
+        const rowGap = isMobile ? 12 : 0;
+        const topY = isMobile ? 130 : 0;
 
         this.planeCards = [];
 
         planes.forEach((key, i) => {
             const data = PLANE_DATA[key];
-            const cx = startX + i * (cardWidth + cardSpacing);
-            const cy = 350;
+            const col = isMobile ? i % mobileCols : i;
+            const row = isMobile ? Math.floor(i / mobileCols) : 0;
+            const cx = startX + col * (cardWidth + cardSpacing);
+            const cy = isMobile
+                ? topY + cardH / 2 + row * (cardH + rowGap)
+                : 350;
 
-            const cardBg = this.add.rectangle(cx, cy, cardWidth, 320, 0x111133, 0.7)
+            const cardBg = this.add.rectangle(cx, cy, cardWidth, cardH, 0x111133, 0.7)
                 .setStrokeStyle(2, 0x3355aa, 0.6)
                 .setInteractive({ useHandCursor: true });
 
-            const plane = this.add.image(cx, cy - 90, `plane_${key}`).setScale(2);
+            const planeScale = isMobile ? 1.2 : 2;
+            const plane = this.add.image(cx, cy - (isMobile ? 60 : 90), `plane_${key}`).setScale(planeScale);
 
-            this.add.text(cx, cy - 30, data.name, {
+            this.add.text(cx, cy - (isMobile ? 25 : 30), data.name, {
                 fontFamily: 'Orbitron, monospace',
-                fontSize: '22px',
+                fontSize: isMobile ? '12px' : '22px',
                 fontStyle: 'bold',
                 color: '#ffffff',
             }).setOrigin(0.5);
 
-            this.add.text(cx, cy, data.desc, {
+            this.add.text(cx, cy - (isMobile ? 10 : 0), data.desc, {
                 fontFamily: 'sans-serif',
-                fontSize: '14px',
+                fontSize: isMobile ? '8px' : '14px',
                 color: '#8899bb',
             }).setOrigin(0.5);
 
-            const statY = cy + 35;
+            const statY = cy + (isMobile ? 10 : 35);
+            const statGap = isMobile ? 22 : 35;
             this.drawStatBar(cx, statY, '속도', data.speed / 600, cardWidth);
-            this.drawStatBar(cx, statY + 35, '화력', data.bulletCount / 3, cardWidth);
-            this.drawStatBar(cx, statY + 70, '내구', data.lives / 5, cardWidth);
+            this.drawStatBar(cx, statY + statGap, '화력', data.bulletCount / 3, cardWidth);
+            this.drawStatBar(cx, statY + statGap * 2, '내구', data.lives / 5, cardWidth);
 
-            const glow = this.add.rectangle(cx, cy, cardWidth + 4, 324, 0x00ccff, 0)
+            const glow = this.add.rectangle(cx, cy, cardWidth + 4, cardH + 4, 0x00ccff, 0)
                 .setStrokeStyle(2, 0x00ccff, 0);
 
             cardBg.on('pointerover', () => {
@@ -109,34 +124,36 @@ export class SelectScene extends Phaser.Scene {
             this.planeCards.push({ cardBg, glow, plane });
         });
 
-        // 조작법 안내
-        const helpY = 550;
-        this.add.rectangle(GAME_WIDTH / 2, helpY, 500, 2, 0x4466aa, 0.3);
+        // 조작법 안내 (모바일에서는 숨김)
+        if (!isMobile) {
+            const helpY = 550;
+            this.add.rectangle(GAME_WIDTH / 2, helpY, 500, 2, 0x4466aa, 0.3);
 
-        this.add.text(GAME_WIDTH / 2, helpY + 25, '조작법', {
-            fontFamily: 'Orbitron, monospace',
-            fontSize: '16px',
-            fontStyle: 'bold',
-            color: '#66aacc',
-        }).setOrigin(0.5);
-
-        const controls: [string, string][] = [
-            ['↑ ↓ ← →', '비행기 이동'],
-            ['SPACE', '총알 발사'],
-        ];
-        controls.forEach(([keyLabel, desc], i) => {
-            const y = helpY + 55 + i * 32;
-            this.add.text(GAME_WIDTH / 2 - 60, y, keyLabel, {
+            this.add.text(GAME_WIDTH / 2, helpY + 25, '조작법', {
                 fontFamily: 'Orbitron, monospace',
-                fontSize: '15px',
-                color: '#00ccff',
-            }).setOrigin(1, 0.5);
-            this.add.text(GAME_WIDTH / 2 - 40, y, desc, {
-                fontFamily: 'sans-serif',
-                fontSize: '15px',
-                color: '#8899bb',
-            }).setOrigin(0, 0.5);
-        });
+                fontSize: '16px',
+                fontStyle: 'bold',
+                color: '#66aacc',
+            }).setOrigin(0.5);
+
+            const controls: [string, string][] = [
+                ['↑ ↓ ← →', '비행기 이동'],
+                ['SPACE', '총알 발사'],
+            ];
+            controls.forEach(([keyLabel, desc], i) => {
+                const y = helpY + 55 + i * 32;
+                this.add.text(GAME_WIDTH / 2 - 60, y, keyLabel, {
+                    fontFamily: 'Orbitron, monospace',
+                    fontSize: '15px',
+                    color: '#00ccff',
+                }).setOrigin(1, 0.5);
+                this.add.text(GAME_WIDTH / 2 - 40, y, desc, {
+                    fontFamily: 'sans-serif',
+                    fontSize: '15px',
+                    color: '#8899bb',
+                }).setOrigin(0, 0.5);
+            });
+        }
     }
 
     private drawStatBar(cx: number, y: number, label: string, ratio: number, cardWidth: number): void {
